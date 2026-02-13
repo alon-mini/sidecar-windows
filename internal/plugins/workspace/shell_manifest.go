@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 
 	"log/slog"
@@ -191,20 +190,16 @@ func acquireManifestLock(path string, exclusive bool) (*os.File, error) {
 		return nil, err
 	}
 
-	lockType := syscall.LOCK_SH | syscall.LOCK_NB
-	if exclusive {
-		lockType = syscall.LOCK_EX | syscall.LOCK_NB
-	}
+	lockType := manifestLockType(exclusive)
 
 	// Try non-blocking lock with timeout (td-984ead)
 	deadline := time.Now().Add(lockTimeout)
 	for {
-		err := syscall.Flock(int(lockFile.Fd()), lockType)
+		err := manifestFlock(lockFile.Fd(), lockType)
 		if err == nil {
 			return lockFile, nil
 		}
-		// EWOULDBLOCK means lock is held by another process
-		if err != syscall.EWOULDBLOCK && err != syscall.EAGAIN {
+		if !isLockBusy(err) {
 			_ = lockFile.Close()
 			return nil, err
 		}
@@ -221,7 +216,7 @@ func releaseManifestLock(lockFile *os.File) {
 	if lockFile == nil {
 		return
 	}
-	_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+	_ = manifestUnlock(lockFile.Fd())
 	_ = lockFile.Close()
 }
 
