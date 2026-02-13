@@ -1,0 +1,126 @@
+sequenceDiagram
+    participant User as User/Agent
+    participant TD as TD System
+    participant Issue as Issue
+    participant Session as Session
+    participant WS as Work Session
+    participant Git as Git State
+
+    Note over User,Git: TICKET CREATION
+    User->>TD: td create "title"
+    TD->>Issue: Create issue (status: open)
+    TD-->>User: Issue ID (td-abc123)
+
+    Note over User,Git: START WORK (Single Issue)
+    User->>TD: td start td-abc123
+    TD->>Session: Record as implementer
+    TD->>Git: Capture git state
+    TD->>Issue: Set status: in_progress
+    TD->>Issue: Set started_at timestamp
+    TD-->>User: Issue started
+
+    Note over User,Git: ALTERNATIVE: START WORK SESSION (Multi-Issue)
+    User->>TD: td ws start "feature-name"
+    TD->>WS: Create work session
+    TD-->>User: Work session created
+    
+    User->>TD: td ws tag td-abc1 td-abc2 td-abc3
+    TD->>Session: Record as implementer for all
+    TD->>Git: Capture git state
+    loop For each issue
+        TD->>Issue: Set status: in_progress
+        TD->>WS: Associate issue with session
+    end
+    TD-->>User: Issues tagged to work session
+
+    Note over User,Git: WORK IN PROGRESS
+    User->>TD: td log "implemented feature X"
+    TD->>Issue: Append log entry
+    TD-->>User: Log recorded
+    
+    Note over TD,Issue: (or for work session)
+    User->>TD: td ws log "completed step 1"
+    TD->>WS: Append log entry
+    loop For each tagged issue
+        TD->>Issue: Append log reference
+    end
+    TD-->>User: Work session log recorded
+
+    Note over User,Git: HANDOFF (Recommended - auto-created if missing)
+    User->>TD: td handoff td-abc123 [structured data]
+    Note right of TD: Accepts:<br/>- done items<br/>- remaining items<br/>- decisions<br/>- uncertainties
+    TD->>Git: Capture git state
+    TD->>Issue: Record handoff metadata
+    TD->>Issue: Mark handoff_complete
+    TD-->>User: Handoff recorded
+
+    Note over TD,Issue: (or for work session)
+    User->>TD: td ws handoff
+    loop For each tagged issue
+        TD->>Git: Capture git state
+        TD->>Issue: Generate handoff from WS logs
+        TD->>Issue: Mark handoff_complete
+    end
+    TD->>WS: End work session
+    TD-->>User: Work session handoff complete
+
+    Note over User,Git: SUBMIT FOR REVIEW
+    User->>TD: td review td-abc123
+    TD->>Issue: Check handoff_complete
+    alt No handoff
+        TD->>Issue: Auto-create minimal handoff
+        Note right of TD: Warning shown:<br/>consider using td handoff<br/>for better documentation
+    end
+    TD->>Issue: Set status: in_review
+    TD->>Issue: Record submitted_at timestamp
+    TD-->>User: Issue submitted for review
+
+    Note over User,Git: NEW SESSION STARTS
+    User->>TD: td usage --new-session
+    TD->>Session: Create new session ID
+    TD->>TD: Query issues in_review
+    TD-->>User: Show reviewable issues
+
+    Note over User,Git: REVIEW: APPROVE PATH
+    User->>TD: td approve td-abc123 [-m "reason"]
+    TD->>Session: Verify different session than implementer
+    alt Same session as implementer
+        TD-->>User: Error: cannot self-review
+    else Different session
+        TD->>Issue: Set status: closed
+        TD->>Issue: Set closed_at timestamp
+        TD->>Issue: Record approval reason
+        TD-->>User: Issue approved and closed
+    end
+
+    Note over User,Git: REVIEW: REJECT PATH
+    User->>TD: td reject td-abc123 [-m "reason"]
+    TD->>Issue: Set status: in_progress
+    TD->>Issue: Clear handoff_complete flag
+    TD->>Issue: Record rejection reason
+    TD-->>User: Issue rejected, back to in_progress
+    
+    Note over User,Git: (Implementer resumes work)
+    User->>TD: td log "addressed feedback"
+    TD->>Issue: Append log entry
+    User->>TD: td handoff td-abc123 [updates]
+    TD->>Issue: Record new handoff
+    User->>TD: td review td-abc123
+    TD->>Issue: Set status: in_review (again)
+
+    Note over User,Git: ALTERNATIVE: DIRECT CLOSE (Admin only)
+    User->>TD: td close td-abc123 [--reason]
+    Note right of User: For duplicates,<br/>won't-fix, cleanup<br/>NOT for completed work
+    TD->>Issue: Set status: closed
+    TD->>Issue: Record close reason
+    TD-->>User: Issue closed (no review)
+
+    Note over User,Git: SPECIAL CASE: MINOR TASKS
+    User->>TD: td create "title" --minor
+    TD->>Issue: Create with minor flag
+    User->>TD: td start td-abc123
+    User->>TD: td review td-abc123 --minor
+    TD->>Issue: Allow self-review exception
+    User->>TD: td approve td-abc123
+    TD->>Issue: Set status: closed (self-review allowed)
+    TD-->>User: Minor task self-approved

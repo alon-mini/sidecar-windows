@@ -1,0 +1,24 @@
+.features {
+  display: flex;
+  align-items: center;
+  padding: 3.5rem 0;
+  width: 100%;
+}
+
+.featureIcon {
+  font-size: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 1.25rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(232, 232, 227, 0.7);
+}
+
+.featureRow {
+  gap: 2.5rem;
+}

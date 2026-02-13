@@ -1,0 +1,72 @@
+# Binaries
+/sidecar
+/termdiff
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Build output
+/bin/
+/dist/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.html
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Dependency directories
+/vendor/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Debug
+debug
+*.log
+
+# Local config (user overrides)
+config.local.json
+
+# Temporary files
+/tmp/
+*.tmp
+.todos/
+
+# Worktree state files
+.sidecar-agent
+.sidecar-task
+.td-root
+
+# Sidecar workspace state files
+.sidecar-pr
+
+# Docusaurus
+website/node_modules/
+website/.docusaurus/
+website/build/
+
+# Sidecar workspace state files
+.sidecar-start.sh
+screenshots/
+
+# Sidecar worktree state files
+.sidecar/
+
+# Sidecar worktree state files
+.sidecar-base
+
+# Benchmarks
+.benchmarks/

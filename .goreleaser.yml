@@ -1,0 +1,78 @@
+version: 2
+
+builds:
+  - id: sidecar
+    main: ./cmd/sidecar
+    binary: sidecar
+    ldflags:
+      - -s -w -X main.Version={{ .Version }}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+  - id: td
+    dir: td-fork
+    main: .
+    binary: td
+    ldflags:
+      - -s -w -X main.Version={{ .Version }}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+  - id: td-sync
+    dir: td-fork
+    main: ./cmd/td-sync
+    binary: td-sync
+    ldflags:
+      - -s -w -X main.Version={{ .Version }}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    builds:
+      - sidecar
+      - td
+      - td-sync
+    files:
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"

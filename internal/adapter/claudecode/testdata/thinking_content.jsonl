@@ -1,0 +1,2 @@
+{"type":"user","uuid":"msg-001","sessionId":"thinking-session","timestamp":"2024-01-15T10:00:00Z","message":{"role":"user","content":"Solve this problem"}}
+{"type":"assistant","uuid":"msg-002","parentUuid":"msg-001","sessionId":"thinking-session","timestamp":"2024-01-15T10:00:10Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"Let me think about this..."},{"type":"text","text":"Here is my answer."}],"usage":{"input_tokens":100,"output_tokens":50}}}

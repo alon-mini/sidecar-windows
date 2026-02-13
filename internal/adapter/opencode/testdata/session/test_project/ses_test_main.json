@@ -1,0 +1,16 @@
+{
+  "id": "ses_test_main",
+  "version": "1.0.0",
+  "projectID": "test_project",
+  "directory": "/tmp/test-opencode-project",
+  "title": "Test Session Main",
+  "time": {
+    "created": 1767050000000,
+    "updated": 1767060000000
+  },
+  "summary": {
+    "additions": 100,
+    "deletions": 20,
+    "files": 5
+  }
+}

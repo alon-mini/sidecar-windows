@@ -1,0 +1,27 @@
+{
+    "version": "0.0.1",
+    "description": "Sidecar + TD — terminal dev workflow and task management for Windows",
+    "homepage": "https://github.com/alon-mini/sidecar-windows",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/alon-mini/sidecar-windows/releases/download/v0.0.1/sidecar-windows_0.0.1_windows_amd64.zip",
+            "hash": ""
+        }
+    },
+    "bin": [
+        "sidecar.exe",
+        "td.exe",
+        "td-sync.exe"
+    ],
+    "checkver": {
+        "github": "https://github.com/alon-mini/sidecar-windows"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/alon-mini/sidecar-windows/releases/download/v$version/sidecar-windows_$version_windows_amd64.zip"
+            }
+        }
+    }
+}

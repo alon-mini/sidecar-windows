@@ -1,0 +1,9 @@
+{
+  "id": "test_project",
+  "worktree": "/tmp/test-opencode-project",
+  "vcs": "git",
+  "time": {
+    "created": 1767000000000,
+    "updated": 1767100000000
+  }
+}

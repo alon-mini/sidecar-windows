@@ -1,0 +1,7 @@
+{
+  "id": "prt_text_001",
+  "sessionID": "ses_test_main",
+  "messageID": "msg_user_001",
+  "type": "text",
+  "text": "Please help me implement a new feature for the application."
+}

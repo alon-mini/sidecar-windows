@@ -1,0 +1,29 @@
+{
+  "id": "msg_assistant_001",
+  "sessionID": "ses_test_main",
+  "role": "assistant",
+  "time": {
+    "created": 1767050001000,
+    "completed": 1767050005000
+  },
+  "parentID": "msg_user_001",
+  "modelID": "claude-sonnet-4",
+  "providerID": "anthropic",
+  "mode": "build",
+  "agent": "build",
+  "path": {
+    "cwd": "/tmp/test-opencode-project",
+    "root": "/tmp/test-opencode-project"
+  },
+  "cost": 0,
+  "tokens": {
+    "input": 1000,
+    "output": 500,
+    "reasoning": 0,
+    "cache": {
+      "read": 800,
+      "write": 200
+    }
+  },
+  "finish": "end-turn"
+}

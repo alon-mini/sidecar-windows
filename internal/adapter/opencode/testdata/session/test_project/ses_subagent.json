@@ -1,0 +1,17 @@
+{
+  "id": "ses_subagent",
+  "version": "1.0.0",
+  "projectID": "test_project",
+  "directory": "/tmp/test-opencode-project",
+  "parentID": "ses_test_main",
+  "title": "Sub-agent Task",
+  "time": {
+    "created": 1767055000000,
+    "updated": 1767056000000
+  },
+  "summary": {
+    "additions": 50,
+    "deletions": 10,
+    "files": 2
+  }
+}

@@ -1,0 +1,116 @@
+//go:build windows
+
+package mux
+
+import (
+	"bytes"
+	"fmt"
+	"os/exec"
+	"strings"
+)
+
+// PsmuxMux implements Multiplexer for psmux (Windows PowerShell multiplexer).
+type PsmuxMux struct{}
+
+func (p *PsmuxMux) Name() string { return "psmux" }
+
+func (p *PsmuxMux) IsInstalled() bool {
+	_, err := exec.LookPath("psmux")
+	return err == nil
+}
+
+func (p *PsmuxMux) NewSession(name, startDir string, env map[string]string) error {
+	args := []string{"new-session", "-d", "-s", name}
+	if startDir != "" {
+		args = append(args, "-c", startDir)
+	}
+	for k, v := range env {
+		args = append(args, "-e", k+"="+v)
+	}
+	return exec.Command("psmux", args...).Run()
+}
+
+func (p *PsmuxMux) KillSession(name string) error {
+	return exec.Command("psmux", "kill-session", "-t", name).Run()
+}
+
+func (p *PsmuxMux) HasSession(name string) bool {
+	err := exec.Command("psmux", "has-session", "-t", name).Run()
+	return err == nil
+}
+
+func (p *PsmuxMux) ListSessions(prefix string) ([]string, error) {
+	out, err := exec.Command("psmux", "list-sessions", "-F", "#{session_name}").Output()
+	if err != nil {
+		return nil, err
+	}
+	var sessions []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && (prefix == "" || strings.HasPrefix(line, prefix)) {
+			sessions = append(sessions, line)
+		}
+	}
+	return sessions, nil
+}
+
+func (p *PsmuxMux) SendKeys(target string, keys ...string) error {
+	args := []string{"send-keys", "-t", target}
+	args = append(args, keys...)
+	return exec.Command("psmux", args...).Run()
+}
+
+func (p *PsmuxMux) SendLiteral(target, text string) error {
+	return exec.Command("psmux", "send-keys", "-t", target, "-l", text).Run()
+}
+
+func (p *PsmuxMux) SendSGRMouse(target string, button, col, row int, release bool) error {
+	releaseChar := "M"
+	if release {
+		releaseChar = "m"
+	}
+	seq := fmt.Sprintf("\x1b[<%d;%d;%d%s", button, col, row, releaseChar)
+	return exec.Command("psmux", "send-keys", "-t", target, "-l", seq).Run()
+}
+
+func (p *PsmuxMux) ResizePane(target string, width, height int) error {
+	return exec.Command("psmux", "resize-pane", "-t", target,
+		"-x", fmt.Sprint(width), "-y", fmt.Sprint(height)).Run()
+}
+
+func (p *PsmuxMux) SetWindowSizeManual(session string) error {
+	return exec.Command("psmux", "set-option", "-t", session,
+		"window-size", "manual").Run()
+}
+
+func (p *PsmuxMux) QueryPaneSize(target string) (width, height int, ok bool) {
+	out, err := exec.Command("psmux", "display-message", "-t", target,
+		"-p", "#{pane_width} #{pane_height}").Output()
+	if err != nil {
+		return 0, 0, false
+	}
+	_, scanErr := fmt.Sscanf(strings.TrimSpace(string(out)), "%d %d", &width, &height)
+	return width, height, scanErr == nil
+}
+
+func (p *PsmuxMux) CapturePaneOutput(target string, scrollback int) (string, error) {
+	args := []string{"capture-pane", "-t", target, "-p", "-e"}
+	if scrollback > 0 {
+		args = append(args, "-S", fmt.Sprintf("-%d", scrollback))
+	}
+	out, err := exec.Command("psmux", args...).Output()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
+func (p *PsmuxMux) LoadBuffer(text string) error {
+	cmd := exec.Command("psmux", "load-buffer", "-")
+	cmd.Stdin = bytes.NewReader([]byte(text))
+	return cmd.Run()
+}
+
+func (p *PsmuxMux) PasteBuffer(target string) error {
+	return exec.Command("psmux", "paste-buffer", "-t", target, "-d", "-p").Run()
+}

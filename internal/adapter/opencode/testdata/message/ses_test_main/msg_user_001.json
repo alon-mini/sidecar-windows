@@ -1,0 +1,17 @@
+{
+  "id": "msg_user_001",
+  "sessionID": "ses_test_main",
+  "role": "user",
+  "time": {
+    "created": 1767050000000
+  },
+  "summary": {
+    "title": "Test user message",
+    "diffs": []
+  },
+  "agent": "build",
+  "model": {
+    "providerID": "anthropic",
+    "modelID": "claude-sonnet-4"
+  }
+}

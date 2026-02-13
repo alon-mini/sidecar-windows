@@ -1,0 +1,4 @@
+{"type":"session","version":3,"id":"test-basic","timestamp":"2026-02-01T00:00:00Z","cwd":"/test/project"}
+{"type":"model_change","id":"mc1","parentId":null,"timestamp":"2026-02-01T00:00:01Z","provider":"anthropic","modelId":"claude-opus-4-5"}
+{"type":"message","id":"m1","parentId":"mc1","timestamp":"2026-02-01T00:00:02Z","message":{"role":"user","content":[{"type":"text","text":"Hello, what files are here?"}]}}
+{"type":"message","id":"m2","parentId":"m1","timestamp":"2026-02-01T00:00:03Z","message":{"role":"assistant","content":[{"type":"text","text":"Let me check the files."}],"model":"claude-opus-4-5","usage":{"input":500,"output":100,"cacheRead":400,"cacheWrite":100,"totalTokens":600,"cost":{"total":0.015}}}}

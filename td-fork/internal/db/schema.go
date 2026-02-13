@@ -1,0 +1,472 @@
+package db
+
+// SchemaVersion is the current database schema version
+const SchemaVersion = 28
+
+const schema = `
+-- Issues table
+CREATE TABLE IF NOT EXISTS issues (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'open',
+    type TEXT NOT NULL DEFAULT 'task',
+    priority TEXT NOT NULL DEFAULT 'P2',
+    points INTEGER DEFAULT 0,
+    labels TEXT DEFAULT '',
+    parent_id TEXT DEFAULT '',
+    acceptance TEXT DEFAULT '',
+    implementer_session TEXT DEFAULT '',
+    reviewer_session TEXT DEFAULT '',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    closed_at DATETIME,
+    deleted_at DATETIME,
+    minor INTEGER DEFAULT 0,
+    created_branch TEXT DEFAULT '',
+    FOREIGN KEY (parent_id) REFERENCES issues(id)
+);
+
+-- Logs table
+CREATE TABLE IF NOT EXISTS logs (
+    id TEXT PRIMARY KEY,
+    issue_id TEXT DEFAULT '',
+    session_id TEXT NOT NULL,
+    work_session_id TEXT DEFAULT '',
+    message TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'progress',
+    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Handoffs table
+CREATE TABLE IF NOT EXISTS handoffs (
+    id TEXT PRIMARY KEY,
+    issue_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    done TEXT DEFAULT '[]',
+    remaining TEXT DEFAULT '[]',
+    decisions TEXT DEFAULT '[]',
+    uncertain TEXT DEFAULT '[]',
+    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (issue_id) REFERENCES issues(id)
+);
+
+-- Git snapshots table
+CREATE TABLE IF NOT EXISTS git_snapshots (
+    id TEXT PRIMARY KEY,
+    issue_id TEXT NOT NULL,
+    event TEXT NOT NULL,
+    commit_sha TEXT NOT NULL,
+    branch TEXT NOT NULL,
+    dirty_files INTEGER DEFAULT 0,
+    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (issue_id) REFERENCES issues(id)
+);
+
+-- Issue files table
+CREATE TABLE IF NOT EXISTS issue_files (
+    id TEXT PRIMARY KEY,
+    issue_id TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'implementation',
+    linked_sha TEXT DEFAULT '',
+    linked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (issue_id) REFERENCES issues(id),
+    UNIQUE(issue_id, file_path)
+);
+
+-- Issue dependencies table
+CREATE TABLE IF NOT EXISTS issue_dependencies (
+    id TEXT PRIMARY KEY,
+    issue_id TEXT NOT NULL,
+    depends_on_id TEXT NOT NULL,
+    relation_type TEXT NOT NULL DEFAULT 'depends_on',
+    UNIQUE(issue_id, depends_on_id, relation_type),
+    FOREIGN KEY (issue_id) REFERENCES issues(id),
+    FOREIGN KEY (depends_on_id) REFERENCES issues(id)
+);
+
+-- Work sessions table
+CREATE TABLE IF NOT EXISTS work_sessions (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ended_at DATETIME,
+    start_sha TEXT DEFAULT '',
+    end_sha TEXT DEFAULT ''
+);
+
+-- Work session issues junction table
+CREATE TABLE IF NOT EXISTS work_session_issues (
+    id TEXT PRIMARY KEY,
+    work_session_id TEXT NOT NULL,
+    issue_id TEXT NOT NULL,
+    tagged_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(work_session_id, issue_id),
+    FOREIGN KEY (work_session_id) REFERENCES work_sessions(id),
+    FOREIGN KEY (issue_id) REFERENCES issues(id)
+);
+
+-- Comments table
+CREATE TABLE IF NOT EXISTS comments (
+    id TEXT PRIMARY KEY,
+    issue_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    text TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (issue_id) REFERENCES issues(id)
+);
+
+-- Sessions table for tracking session history
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    name TEXT DEFAULT '',
+    branch TEXT DEFAULT '',
+    agent_type TEXT DEFAULT '',
+    agent_pid INTEGER DEFAULT 0,
+    context_id TEXT DEFAULT '',
+    previous_session_id TEXT DEFAULT '',
+    started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ended_at DATETIME,
+    last_activity DATETIME
+);
+
+-- Schema info table for version tracking
+CREATE TABLE IF NOT EXISTS schema_info (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_issues_status ON issues(status);
+CREATE INDEX IF NOT EXISTS idx_issues_priority ON issues(priority);
+CREATE INDEX IF NOT EXISTS idx_issues_type ON issues(type);
+CREATE INDEX IF NOT EXISTS idx_issues_parent ON issues(parent_id);
+CREATE INDEX IF NOT EXISTS idx_issues_deleted ON issues(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_logs_issue ON logs(issue_id);
+CREATE INDEX IF NOT EXISTS idx_handoffs_issue ON handoffs(issue_id);
+CREATE INDEX IF NOT EXISTS idx_git_snapshots_issue ON git_snapshots(issue_id);
+CREATE INDEX IF NOT EXISTS idx_issue_files_issue ON issue_files(issue_id);
+CREATE INDEX IF NOT EXISTS idx_comments_issue ON comments(issue_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_branch ON sessions(branch);
+CREATE INDEX IF NOT EXISTS idx_sessions_branch_agent ON sessions(branch, agent_type, agent_pid);
+`
+
+// BaseSchema returns the initial database schema DDL.
+// Used by the sync test harness to avoid schema duplication.
+func BaseSchema() string {
+	return schema
+}
+
+// Migration defines a database migration
+type Migration struct {
+	Version     int
+	Description string
+	SQL         string
+}
+
+// Migrations is the list of all database migrations in order
+var Migrations = []Migration{
+	// Version 1 is the initial schema - no migration needed
+	{
+		Version:     2,
+		Description: "Add action_log table for undo support",
+		SQL: `
+CREATE TABLE IF NOT EXISTS action_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    previous_data TEXT DEFAULT '',
+    new_data TEXT DEFAULT '',
+    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    undone INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_action_log_session ON action_log(session_id);
+CREATE INDEX IF NOT EXISTS idx_action_log_timestamp ON action_log(timestamp);
+`,
+	},
+	{
+		Version:     3,
+		Description: "Allow work session logs without issue_id",
+		SQL: `
+-- SQLite doesn't support ALTER COLUMN, so we need to recreate the table
+CREATE TABLE logs_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    issue_id TEXT DEFAULT '',
+    session_id TEXT NOT NULL,
+    work_session_id TEXT DEFAULT '',
+    message TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'progress',
+    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+INSERT INTO logs_new SELECT * FROM logs;
+DROP TABLE logs;
+ALTER TABLE logs_new RENAME TO logs;
+CREATE INDEX IF NOT EXISTS idx_logs_issue ON logs(issue_id);
+CREATE INDEX IF NOT EXISTS idx_logs_work_session ON logs(work_session_id);
+`,
+	},
+	{
+		Version:     4,
+		Description: "Add minor flag to issues for self-reviewable tasks",
+		SQL:         `ALTER TABLE issues ADD COLUMN minor INTEGER DEFAULT 0;`,
+	},
+	{
+		Version:     5,
+		Description: "Add created_branch to issues",
+		SQL:         `ALTER TABLE issues ADD COLUMN created_branch TEXT DEFAULT '';`,
+	},
+	{
+		Version:     6,
+		Description: "Add creator_session for review enforcement",
+		SQL:         `ALTER TABLE issues ADD COLUMN creator_session TEXT DEFAULT '';`,
+	},
+	{
+		Version:     7,
+		Description: "Add session history for review enforcement",
+		SQL: `CREATE TABLE IF NOT EXISTS issue_session_history (
+    id TEXT PRIMARY KEY,
+    issue_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (issue_id) REFERENCES issues(id)
+);
+CREATE INDEX IF NOT EXISTS idx_ish_issue ON issue_session_history(issue_id);
+CREATE INDEX IF NOT EXISTS idx_ish_session ON issue_session_history(session_id);`,
+	},
+	{
+		Version:     8,
+		Description: "Add timestamp indexes for activity queries",
+		SQL: `CREATE INDEX IF NOT EXISTS idx_handoffs_timestamp ON handoffs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_issues_deleted_status ON issues(deleted_at, status);`,
+	},
+	{
+		Version:     9,
+		Description: "Add boards and board_issues tables",
+		SQL: `
+-- Boards table
+CREATE TABLE IF NOT EXISTS boards (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    last_viewed_at DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Board-Issue membership with ordering
+CREATE TABLE IF NOT EXISTS board_issues (
+    board_id TEXT NOT NULL,
+    issue_id TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (board_id, issue_id),
+    FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
+    FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_board_issues_position ON board_issues(board_id, position);
+`,
+	},
+	{
+		Version:     10,
+		Description: "Query-based boards with sparse ordering and sprint field",
+		SQL: `
+-- Add query and is_builtin columns to boards
+ALTER TABLE boards ADD COLUMN query TEXT NOT NULL DEFAULT '';
+ALTER TABLE boards ADD COLUMN is_builtin INTEGER NOT NULL DEFAULT 0;
+
+-- Rename board_issues to board_issue_positions for semantic clarity
+DROP INDEX IF EXISTS idx_board_issues_position;
+ALTER TABLE board_issues RENAME TO board_issue_positions;
+
+-- Recreate index on positions
+CREATE UNIQUE INDEX IF NOT EXISTS idx_board_positions_position
+    ON board_issue_positions(board_id, position);
+
+-- Add sprint field to issues
+ALTER TABLE issues ADD COLUMN sprint TEXT DEFAULT '';
+
+-- Create built-in "All Issues" board (empty query = all issues)
+INSERT INTO boards (id, name, query, is_builtin, created_at, updated_at)
+VALUES ('bd-all-issues', 'All Issues', '', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT(name) DO UPDATE SET
+    query = excluded.query,
+    is_builtin = 1,
+    updated_at = CURRENT_TIMESTAMP;
+`,
+	},
+	{
+		Version:     11,
+		Description: "Add view_mode to boards for swimlanes/backlog toggle",
+		SQL:         `ALTER TABLE boards ADD COLUMN view_mode TEXT NOT NULL DEFAULT 'swimlanes';`,
+	},
+	{
+		Version:     12,
+		Description: "Add missing indices for monitor query performance",
+		SQL: `CREATE INDEX IF NOT EXISTS idx_action_log_entity_type ON action_log(entity_id, action_type);
+CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_comments_created_at ON comments(created_at);`,
+	},
+	{
+		Version:     13,
+		Description: "Extend sessions table for full DB-backed session storage",
+		// SQL is set dynamically in runMigrationsInternal based on whether sessions table exists
+		SQL: "",
+	},
+	{
+		Version:     14,
+		Description: "Repair sessions table for DBs where v13 did not apply correctly",
+		// Reuses migrateV13Sessions — handles missing table and old-schema table
+		SQL: "",
+	},
+	{
+		Version:     15,
+		Description: "Migrate integer PK tables to text IDs for sync compatibility",
+		// Handled by custom Go code in migrations.go (migrateToTextIDs)
+		SQL: "",
+	},
+	{
+		Version:     16,
+		Description: "Add sync_state table and sync columns to action_log",
+		SQL: `
+CREATE TABLE IF NOT EXISTS sync_state (
+    project_id TEXT PRIMARY KEY,
+    last_pushed_action_id INTEGER DEFAULT 0,
+    last_pulled_server_seq INTEGER DEFAULT 0,
+    last_sync_at DATETIME,
+    sync_disabled INTEGER DEFAULT 0
+);
+ALTER TABLE action_log ADD COLUMN synced_at DATETIME;
+ALTER TABLE action_log ADD COLUMN server_seq INTEGER;
+`,
+	},
+	{
+		Version:     17,
+		Description: "Add sync_conflicts table for overwrite tracking",
+		SQL: `
+CREATE TABLE IF NOT EXISTS sync_conflicts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    server_seq INTEGER NOT NULL,
+    local_data JSON,
+    remote_data JSON,
+    overwritten_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_sync_conflicts_entity ON sync_conflicts(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_sync_conflicts_time ON sync_conflicts(overwritten_at);
+CREATE INDEX IF NOT EXISTS idx_sync_conflicts_seq ON sync_conflicts(server_seq);
+`,
+	},
+	{
+		Version:     18,
+		Description: "Add deterministic ID columns to composite-key tables for sync",
+		// Handled by custom Go code in migrations.go (migrateDeterministicIDs)
+		SQL: "",
+	},
+	{
+		Version:     19,
+		Description: "Convert absolute file paths to repo-relative in issue_files",
+		// Handled by custom Go code in migrations.go (migrateFilePathsToRelative)
+		SQL: "",
+	},
+	{
+		Version:     20,
+		Description: "Normalize legacy action_log entries for composite-key entities",
+		// Handled by custom Go code in migrations.go (migrateLegacyActionLogCompositeIDs)
+		SQL: "",
+	},
+	{
+		Version:     21,
+		Description: "Add sync_history table for tracking sync operations",
+		SQL: `
+CREATE TABLE IF NOT EXISTS sync_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    direction TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    server_seq INTEGER,
+    device_id TEXT DEFAULT '',
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_sync_history_ts ON sync_history(timestamp);
+`,
+	},
+	{
+		Version:     22,
+		Description: "Sparse positioning: drop unique position index, re-space with gaps",
+		SQL: `
+DROP INDEX IF EXISTS idx_board_positions_position;
+UPDATE board_issue_positions SET position = position * 65536;
+`,
+	},
+	{
+		Version:     23,
+		Description: "Drop UNIQUE(name) on boards to prevent sync data loss",
+		SQL: `
+CREATE TABLE boards_new (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE,
+    last_viewed_at DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    query TEXT NOT NULL DEFAULT '',
+    is_builtin INTEGER NOT NULL DEFAULT 0,
+    view_mode TEXT NOT NULL DEFAULT 'swimlanes'
+);
+INSERT INTO boards_new SELECT * FROM boards;
+DROP TABLE boards;
+ALTER TABLE boards_new RENAME TO boards;
+`,
+	},
+	{
+		Version:     24,
+		Description: "Add deterministic id column to work_session_issues for sync",
+		// Handled by custom Go code in migrations.go (migrateWorkSessionIssueIDs)
+		SQL: "",
+	},
+	{
+		Version:     25,
+		Description: "Add deleted_at to board_issue_positions for soft delete sync",
+		// Handled by custom Go code in migrations.go (migrateBoardPositionSoftDelete)
+		SQL: "",
+	},
+	{
+		Version:     26,
+		Description: "Enforce NOT NULL on action_log.id by fixing NULL values and recreating table",
+		// Handled by custom Go code in migrations.go (migrateActionLogNotNullID)
+		SQL: "",
+	},
+	{
+		Version:     27,
+		Description: "Normalize NULL session fields in issues",
+		SQL: `
+UPDATE issues SET implementer_session = '' WHERE implementer_session IS NULL;
+UPDATE issues SET reviewer_session = '' WHERE reviewer_session IS NULL;
+UPDATE issues SET creator_session = '' WHERE creator_session IS NULL;
+`,
+	},
+	{
+		Version:     28,
+		Description: "Add notes table for sidecar notes sync",
+		SQL: `
+CREATE TABLE IF NOT EXISTS notes (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    pinned INTEGER DEFAULT 0,
+    archived INTEGER DEFAULT 0,
+    deleted_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notes_deleted ON notes(deleted_at);
+`,
+	},
+}

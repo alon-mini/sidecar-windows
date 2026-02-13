@@ -1,0 +1,5 @@
+default:
+  name: Sidecar Team
+  title: Sidecar Maintainers
+  url: https://github.com/marcus/sidecar
+  image_url: https://github.com/marcus.png

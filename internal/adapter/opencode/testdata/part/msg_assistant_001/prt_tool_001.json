@@ -1,0 +1,26 @@
+{
+  "id": "prt_tool_001",
+  "sessionID": "ses_test_main",
+  "messageID": "msg_assistant_001",
+  "type": "tool",
+  "callID": "toolu_test_001",
+  "tool": "bash",
+  "state": {
+    "status": "completed",
+    "input": {
+      "command": "ls -la",
+      "description": "List files in current directory"
+    },
+    "output": "total 16\ndrwxr-xr-x  4 user  staff  128 Dec 29 10:00 .\ndrwxr-xr-x  3 user  staff   96 Dec 29 10:00 ..\n-rw-r--r--  1 user  staff  100 Dec 29 10:00 main.go",
+    "title": "List files in current directory",
+    "metadata": {
+      "output": "total 16\ndrwxr-xr-x  4 user  staff  128 Dec 29 10:00 .\ndrwxr-xr-x  3 user  staff   96 Dec 29 10:00 ..\n-rw-r--r--  1 user  staff  100 Dec 29 10:00 main.go",
+      "exit": 0,
+      "description": "List files in current directory"
+    },
+    "time": {
+      "start": 1767050002000,
+      "end": 1767050002100
+    }
+  }
+}

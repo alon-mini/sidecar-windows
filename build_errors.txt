@@ -1,0 +1,45 @@
+﻿go : # github.com/mar
+cus/td/internal/confi
+g
+At line:1 char:1
++ go build ./... 
+2>&1 | Out-File 
+-Encoding utf8 
+-FilePath 
+build_errors. ...
++ ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (# githu   
+ b.com/marcus/td/    
+internal/config:    
+String) [], Remo    
+teException
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+..\..\go\pkg\mod\gith
+ub.com\marcus\td@v0.3
+3.0\internal\config\c
+onfig.go:92:20: 
+undefined: 
+syscall.Flock
+..\..\go\pkg\mod\gith
+ub.com\marcus\td@v0.3
+3.0\internal\config\c
+onfig.go:92:47: 
+undefined: 
+syscall.LOCK_EX
+..\..\go\pkg\mod\gith
+ub.com\marcus\td@v0.3
+3.0\internal\config\c
+onfig.go:95:16: 
+undefined: 
+syscall.Flock
+..\..\go\pkg\mod\gith
+ub.com\marcus\td@v0.3
+3.0\internal\config\c
+onfig.go:95:43: 
+undefined: 
+syscall.LOCK_UN

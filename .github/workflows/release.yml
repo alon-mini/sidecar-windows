@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-scoop:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Get Windows zip SHA256
+        id: sha
+        run: |
+          URL="https://github.com/alon-mini/sidecar-windows/releases/download/v${{ steps.version.outputs.version }}/sidecar-windows_${{ steps.version.outputs.version }}_windows_amd64.zip"
+          # Wait for release assets to be available
+          for i in 1 2 3 4 5; do
+            SHA=$(curl -sfL "$URL" | sha256sum | cut -d' ' -f1)
+            if [ -n "$SHA" ] && [ "$SHA" != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" ]; then
+              echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+              break
+            fi
+            echo "Waiting for release asset (attempt $i)..."
+            sleep 30
+          done
+
+      - name: Update Scoop manifest
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="${{ steps.sha.outputs.sha256 }}"
+          MANIFEST="scoop/sidecar.json"
+
+          # Update version
+          sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$MANIFEST"
+
+          # Update URL
+          sed -i "s|releases/download/v[^/]*/sidecar-windows_[^\"]*_windows_amd64.zip|releases/download/v${VERSION}/sidecar-windows_${VERSION}_windows_amd64.zip|" "$MANIFEST"
+
+          # Update hash
+          sed -i "s/\"hash\": \"[^\"]*\"/\"hash\": \"$SHA\"/" "$MANIFEST"
+
+          echo "Updated $MANIFEST to v${VERSION}"
+          cat "$MANIFEST"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add scoop/sidecar.json
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "scoop: bump to v${{ steps.version.outputs.version }}"
+          git push
